@@ -1,0 +1,28 @@
+{
+  "realm": "myorg",
+  "enabled": true,
+  "userFederationProviders": [
+    {
+      "providerName": "ldap",
+      "changedSyncPeriod": -1,
+      "fullSyncPeriod": -1,
+      "priority": 0,
+      "displayName": "OpenLDAP",
+      "config": {
+        "vendor": "other",
+        "usernameLDAPAttribute": "uid",
+        "rdnLDAPAttribute": "uid",
+        "uuidLDAPAttribute": "entryUUID",
+        "userObjectClasses": "inetOrgPerson, organizationalPerson",
+        "connectionUrl": "ldap://openldap:389",
+        "usersDn": "ou=users,dc=example,dc=org",
+        "bindDn": "cn=admin,dc=example,dc=org",
+        "bindCredential": "adminpassword",
+        "searchScope": "1",
+        "emailLDAPAttribute": "mail",
+        "firstNameLDAPAttribute": "givenName",
+        "lastNameLDAPAttribute": "sn"
+      }
+    }
+  ]
+}

@@ -1,0 +1,116 @@
+version: '3'
+
+services:
+  openldap:
+    image: bitnami/openldap:latest
+    container_name: openldap
+    ports:
+      - "389:389"
+      - "636:636"  # LDAPS port
+    environment:
+      - LDAP_ADMIN_USERNAME=${LDAP_ADMIN_USERNAME}
+      - LDAP_ADMIN_PASSWORD=${LDAP_ADMIN_PASSWORD}
+      - LDAP_USERS=${LDAP_USERS}
+      - LDAP_USER_PASSWORDS=${LDAP_USER_PASSWORDS}
+      - LDAP_ROOT=${LDAP_ROOT}
+      - LDAP_ORGANISATION=${LDAP_ORGANISATION}
+    volumes:
+      - ldap_data:/bitnami/openldap
+      - ./backup/ldap:/backup
+    networks:
+      - keycloak-ldap
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost:389", "-b", "${LDAP_ROOT}", "-D", "cn=${LDAP_ADMIN_USERNAME},${LDAP_ROOT}", "-w", "${LDAP_ADMIN_PASSWORD}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: ${LDAP_MEMORY_LIMIT:-512M}
+        reservations:
+          memory: 256M
+
+  keycloak:
+    image: quay.io/keycloak/keycloak:latest
+    container_name: keycloak
+    ports:
+      - "8080:8080"
+    environment:
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+      - KC_DB=${KC_DB}
+      - KC_DB_URL=${KC_DB_URL}
+      - KC_DB_USERNAME=${KC_DB_USERNAME}
+      - KC_DB_PASSWORD=${KC_DB_PASSWORD}
+      - KC_HOSTNAME=${KC_HOSTNAME}
+      - KC_PROXY=edge
+      - KC_HTTP_ENABLED=true
+      - KC_HTTP_RELATIVE_PATH=/auth
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - start-dev
+    networks:
+      - keycloak-ldap
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/auth/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: ${KEYCLOAK_MEMORY_LIMIT:-1G}
+        reservations:
+          memory: 512M
+
+  postgres:
+    image: postgres:13
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB}
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST_AUTH_METHOD=trust
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backup/postgres:/backup
+    networks:
+      - keycloak-ldap
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    deploy:
+      resources:
+        limits:
+          memory: ${POSTGRES_MEMORY_LIMIT:-1G}
+        reservations:
+          memory: 512M
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/conf.d:/etc/nginx/conf.d
+      - ./nginx/ssl:/etc/nginx/ssl
+    depends_on:
+      - keycloak
+    networks:
+      - keycloak-ldap
+
+volumes:
+  ldap_data:
+  postgres_data:
+
+networks:
+  keycloak-ldap:
+    driver: bridge
